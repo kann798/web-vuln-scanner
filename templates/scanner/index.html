@@ -1,0 +1,393 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}VulnScanner AI — Web Vulnerability Scanner{% endblock %}
+
+{% block content %}
+<div class="scanner-page">
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-badge">
+            <span class="badge-dot"></span>
+            <span>ML-Powered &middot; Random Forest Classifier &middot; 90%+ Accuracy</span>
+        </div>
+        <h1 class="hero-title">
+            Web <span class="text-accent">Vulnerability</span><br>
+            Intelligence Scanner
+        </h1>
+        <p class="hero-subtitle">
+            Detect XSS, SQL Injection, CSRF, Open Redirects &amp; Sensitive Data Exposure<br>
+            with AI-powered analysis and professional PDF reporting
+        </p>
+
+        <!-- Scan Form -->
+        <div class="scan-card">
+            <div class="scan-card-header">
+                <span class="scan-card-icon">⬡</span>
+                <span class="scan-card-title">Target URL</span>
+                <div class="scan-card-line"></div>
+            </div>
+
+            <div class="input-row">
+                <div class="input-wrapper">
+                    <span class="input-prefix">https://</span>
+                    <input
+                        type="text"
+                        id="targetUrl"
+                        class="url-input"
+                        placeholder="example.com or paste full URL"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                    <span class="input-cursor">|</span>
+                </div>
+                <button id="scanBtn" class="scan-btn" onclick="startScan()">
+                    <span class="btn-icon">▶</span>
+                    <span class="btn-text">START SCAN</span>
+                    <span class="btn-glow"></span>
+                </button>
+            </div>
+
+            <!-- Quick targets -->
+            <div class="quick-targets">
+                <span class="qt-label">Quick test:</span>
+                <button class="qt-btn" onclick="setUrl('http://testphp.vulnweb.com')">testphp.vulnweb.com</button>
+                <button class="qt-btn" onclick="setUrl('http://demo.testfire.net')">demo.testfire.net</button>
+                <button class="qt-btn" onclick="setUrl('https://example.com')">example.com</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Progress / Results Container -->
+    <div id="scanProgress" class="scan-progress hidden">
+        <div class="progress-header">
+            <div class="progress-spinner"></div>
+            <div>
+                <div class="progress-title">Scanning in progress...</div>
+                <div class="progress-url" id="progressUrl"></div>
+            </div>
+        </div>
+        <div class="progress-steps" id="progressSteps">
+            <div class="step active" id="step1">
+                <span class="step-dot"></span>
+                <span>Fetching target page</span>
+            </div>
+            <div class="step" id="step2">
+                <span class="step-dot"></span>
+                <span>Extracting ML features</span>
+            </div>
+            <div class="step" id="step3">
+                <span class="step-dot"></span>
+                <span>Running Random Forest classifier</span>
+            </div>
+            <div class="step" id="step4">
+                <span class="step-dot"></span>
+                <span>Analyzing XSS / SQLi / CSRF vectors</span>
+            </div>
+            <div class="step" id="step5">
+                <span class="step-dot"></span>
+                <span>Generating PDF report</span>
+            </div>
+        </div>
+        <div class="progress-bar-wrap">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <!-- Scan Results -->
+    <div id="scanResults" class="scan-results hidden"></div>
+
+    <!-- Error display -->
+    <div id="scanError" class="scan-error hidden"></div>
+
+    <!-- Stats Row -->
+    <section class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value">{{ total_scans }}</div>
+            <div class="stat-label">Total Scans</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value text-danger">{{ critical_scans }}</div>
+            <div class="stat-label">High Risk Detected</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value text-accent">5</div>
+            <div class="stat-label">Vuln Types</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">90%+</div>
+            <div class="stat-label">ML Accuracy</div>
+        </div>
+    </section>
+
+    <!-- Capabilities Grid -->
+    <section class="capabilities">
+        <h2 class="section-title">Detection Capabilities</h2>
+        <div class="cap-grid">
+            <div class="cap-card">
+                <div class="cap-icon xss">XSS</div>
+                <div class="cap-name">Cross-Site Scripting</div>
+                <div class="cap-desc">Detects reflected, stored, and DOM-based XSS vectors including unsafe event handlers and dangerous DOM APIs</div>
+                <div class="cap-badge high">HIGH</div>
+            </div>
+            <div class="cap-card">
+                <div class="cap-icon sqli">SQLi</div>
+                <div class="cap-name">SQL Injection</div>
+                <div class="cap-desc">Identifies SQL error signatures, exposed database info, and numeric parameter patterns vulnerable to injection</div>
+                <div class="cap-badge critical">CRITICAL</div>
+            </div>
+            <div class="cap-card">
+                <div class="cap-icon csrf">CSRF</div>
+                <div class="cap-name">CSRF Vulnerabilities</div>
+                <div class="cap-desc">Scans POST forms for missing CSRF tokens and analyzes state-changing requests lacking forgery protection</div>
+                <div class="cap-badge medium">MEDIUM</div>
+            </div>
+            <div class="cap-card">
+                <div class="cap-icon redirect">REDIR</div>
+                <div class="cap-name">Open Redirect</div>
+                <div class="cap-desc">Detects unvalidated redirect parameters that could redirect users to attacker-controlled domains</div>
+                <div class="cap-badge medium">MEDIUM</div>
+            </div>
+            <div class="cap-card">
+                <div class="cap-icon exposure">DATA</div>
+                <div class="cap-name">Sensitive Data Exposure</div>
+                <div class="cap-desc">Checks for missing security headers, API key leakage, unencrypted transmission, and server version disclosure</div>
+                <div class="cap-badge high">HIGH</div>
+            </div>
+            <div class="cap-card">
+                <div class="cap-icon ai">AI</div>
+                <div class="cap-name">ML Classification</div>
+                <div class="cap-desc">Random Forest model trained on 2000+ synthetic vulnerability patterns provides probabilistic threat assessment</div>
+                <div class="cap-badge info">AI</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Recent Scans -->
+    {% if recent_scans %}
+    <section class="recent-scans">
+        <div class="section-header-row">
+            <h2 class="section-title">Recent Scans</h2>
+            <a href="{% url 'scanner:history' %}" class="view-all-link">View All →</a>
+        </div>
+        <div class="scans-table-wrap">
+            <table class="scans-table">
+                <thead>
+                    <tr>
+                        <th>Target URL</th>
+                        <th>Risk Score</th>
+                        <th>Vulnerabilities</th>
+                        <th>Duration</th>
+                        <th>Date</th>
+                        <th>Report</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for scan in recent_scans %}
+                    <tr class="scan-row" onclick="window.location='{% url 'scanner:scan_detail' scan.pk %}'">
+                        <td class="url-cell">
+                            <span class="url-protocol">{% if scan.url|slice:":5" == "https" %}🔒{% else %}⚠{% endif %}</span>
+                            {{ scan.url|truncatechars:50 }}
+                        </td>
+                        <td>
+                            <span class="risk-badge risk-{{ scan.risk_level }}">
+                                {{ scan.risk_score }}/100
+                            </span>
+                        </td>
+                        <td class="vuln-count">{{ scan.vulnerabilities_found }}</td>
+                        <td class="duration-cell">{{ scan.scan_duration }}s</td>
+                        <td class="date-cell">{{ scan.scan_date|date:"M d, H:i" }}</td>
+                        <td onclick="event.stopPropagation()">
+                            {% if scan.pdf_report %}
+                            <a href="{% url 'scanner:download_report' scan.pk %}" class="dl-btn">⬇ PDF</a>
+                            {% else %}
+                            <span class="no-report">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- ═══════════════════════════════════════════
+         KEY FEATURES
+    ═══════════════════════════════════════════ -->
+    <div class="section-divider"></div>
+    <section class="features-section">
+        <h2 class="section-title">Key Features</h2>
+        <div class="features-grid">
+
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <div class="feature-title">AI-Powered Detection</div>
+                <div class="feature-desc">Random Forest classifier trained on 2,000+ vulnerability patterns delivers probabilistic risk scoring with 90%+ accuracy alongside rule-based heuristic checks.</div>
+                <span class="feature-tag">MACHINE LEARNING</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-title">Real-Time Scanning</div>
+                <div class="feature-desc">Active probing with live HTTP requests — tests XSS payloads, SQL error injection, CSRF token presence, and redirect parameter validation in seconds.</div>
+                <span class="feature-tag">ACTIVE TESTING</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📄</div>
+                <div class="feature-title">Professional PDF Reports</div>
+                <div class="feature-desc">Auto-generated executive-grade PDF reports with risk score, vulnerability breakdown, evidence, proof-of-concept payloads, and developer fix code.</div>
+                <span class="feature-tag">REPORTING</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <div class="feature-title">Exact Location Pinpointing</div>
+                <div class="feature-desc">Every finding shows the exact vulnerable parameter, HTTP location, PoC URL, attack payload, and copy-paste fix code — no vague warnings.</div>
+                <span class="feature-tag">PRECISION</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <div class="feature-title">OWASP Top 10 Coverage</div>
+                <div class="feature-desc">Covers the most critical web application security risks: XSS, SQL Injection, CSRF, Open Redirect, and Sensitive Data Exposure with security header analysis.</div>
+                <span class="feature-tag">OWASP</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <div class="feature-title">Vulnerability Dashboard</div>
+                <div class="feature-desc">Interactive charts showing finding distribution across OWASP categories, severity level breakdown, and risk trends across all your historical scans.</div>
+                <span class="feature-tag">ANALYTICS</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔧</div>
+                <div class="feature-title">Developer-Friendly Fixes</div>
+                <div class="feature-desc">Each vulnerability includes ready-to-use Django/Python remediation code. No security jargon — just practical, copy-paste solutions for developers.</div>
+                <span class="feature-tag">REMEDIATION</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📜</div>
+                <div class="feature-title">Full Scan History</div>
+                <div class="feature-desc">All scans saved with full vulnerability details. Browse, filter, compare, and re-download PDF reports for any previous scan at any time.</div>
+                <span class="feature-tag">HISTORY</span>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <div class="feature-title">SSL / HTTPS Handling</div>
+                <div class="feature-desc">Automatically falls back to HTTP on SSL errors, flags plain HTTP transmission as a vulnerability, and checks HSTS header enforcement.</div>
+                <span class="feature-tag">TLS / SSL</span>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════
+         FAQ
+    ═══════════════════════════════════════════ -->
+    <div class="section-divider"></div>
+    <section class="faq-section">
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <div class="faq-list">
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">What websites can I scan with VulnScanner AI?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <p>Only scan websites you own or have explicit written permission to test. For safe practice, use intentionally vulnerable sites like <code>testphp.vulnweb.com</code> or <code>demo.testfire.net</code> — public test targets designed for security tools.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">How does the AI/ML detection work?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <p>The scanner uses a <strong>Random Forest classifier</strong> trained on 2,000+ synthetic vulnerability patterns. It extracts 30 features from each URL and page — including query parameters, HTML signals, response headers, and URL patterns — then predicts the most likely vulnerability class alongside traditional rule-based checks.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">What does each risk level mean?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <ul>
+                        <li><strong>Critical (75–100)</strong> — Immediate action required. Vulnerabilities like SQL Injection that can lead to full compromise.</li>
+                        <li><strong>High (50–74)</strong> — Serious risk. XSS and missing security headers enabling significant attacks.</li>
+                        <li><strong>Medium (25–49)</strong> — Moderate risk. CSRF or open redirects requiring specific conditions to exploit.</li>
+                        <li><strong>Low (1–24)</strong> — Minor informational exposures with limited direct impact.</li>
+                        <li><strong>Info (0)</strong> — No significant vulnerabilities detected.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">How long does a scan take?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <p>Most scans complete in <strong>10–40 seconds</strong> depending on target response time and parameter count. Pages with many form inputs take longer as each parameter is actively tested with multiple payloads. A 15-second per-request timeout prevents hanging.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">Are the scan results 100% accurate?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <p>No automated scanner is 100% accurate. VulnScanner AI may produce false positives or miss real vulnerabilities. It is a first-pass tool to surface likely issues quickly. Always validate critical findings manually or with a qualified security professional before remediation.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">How do I download the PDF report?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <p>After a scan completes, a <strong>⬇ Download PDF</strong> button appears in the results. You can also access reports from the <strong>History</strong> page. Reports include executive summary, risk score, all findings with payloads and fix code, and security recommendations.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">What does "Sensitive Data Exposure" check for?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <p>This category checks for: missing security headers (<code>X-Frame-Options</code>, <code>CSP</code>, <code>HSTS</code>, <code>X-Content-Type-Options</code>), hardcoded API keys or passwords in HTML source, server version disclosure, plain HTTP usage, and database connection strings exposed in page source.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    <span class="faq-q-text">Can I use this for bug bounty programs?</span>
+                    <span class="faq-arrow">▶</span>
+                </button>
+                <div class="faq-answer">
+                    <p>VulnScanner AI works well as a <strong>first-pass reconnaissance tool</strong> for bug bounty programs where you have permission to test. Use scan results as starting points for deeper manual investigation. Always read the program scope carefully and stay strictly within authorized targets.</p>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <div style="height:60px;"></div>
+
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}{% endblock %}

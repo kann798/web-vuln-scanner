@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VulnScanner AI{% endblock %}</title>
+    {% load static %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    {% block extra_head %}{% endblock %}
+    <style>
+    /* ── Intro Splash ── */
+    #splash{position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity .6s ease,visibility .6s ease}
+    #splash.hide{opacity:0;visibility:hidden;pointer-events:none}
+    #splashCanvas{position:absolute;inset:0;width:100%;height:100%}
+    .splash-content{position:relative;z-index:2;text-align:center;font-family:'Space Mono',monospace}
+    .splash-logo{font-size:clamp(28px,5vw,52px);font-weight:700;color:#00FF88;letter-spacing:6px;text-shadow:0 0 20px #00FF88,0 0 40px #00FF8855;margin-bottom:8px;opacity:0;animation:splogoIn .5s ease .7s forwards,glitch 5s ease 2.5s infinite}
+    .splash-logo span{color:#fff}
+    .splash-tagline{font-size:clamp(10px,1.4vw,13px);color:#00FF8899;letter-spacing:3px;text-transform:uppercase;margin-bottom:36px;opacity:0;animation:splogoIn .5s ease 1s forwards}
+    .splash-boot{font-size:12px;color:#00FF88;letter-spacing:1px;text-align:left;width:min(420px,90vw);min-height:112px}
+    .boot-line{opacity:0;transform:translateX(-6px);white-space:nowrap;margin-bottom:4px;animation:bootIn .18s ease forwards}
+    .boot-prefix{color:#00FF8855}.boot-ok{color:#00FF88}.boot-warn{color:#FFB800}
+    .splash-bar-wrap{width:min(320px,85vw);height:3px;background:#0a0a0a;border:1px solid #00FF8833;border-radius:2px;margin-top:22px;overflow:hidden;opacity:0;animation:splogoIn .3s ease 1.2s forwards}
+    .splash-bar-fill{height:100%;background:linear-gradient(90deg,#00FF88,#00B4FF);width:0%;border-radius:2px;box-shadow:0 0 8px #00FF88;transition:width .05s linear}
+    .splash-skip{position:absolute;bottom:24px;right:24px;font-family:'Space Mono',monospace;font-size:11px;color:#ffffff33;cursor:pointer;letter-spacing:1px;transition:color .2s;z-index:3}
+    .splash-skip:hover{color:#00FF8899}
+    @keyframes splogoIn{to{opacity:1;transform:none}}
+    @keyframes bootIn{to{opacity:1;transform:none}}
+    @keyframes glitch{0%,94%,100%{text-shadow:0 0 20px #00FF88,0 0 40px #00FF8855;transform:none}95%{clip-path:inset(20% 0 35% 0);transform:translateX(-3px);text-shadow:-3px 0 #FF3B30,3px 0 #00B4FF}96%{clip-path:inset(55% 0 8% 0);transform:translateX(3px);text-shadow:3px 0 #FF3B30,-3px 0 #00B4FF}97%{clip-path:none;transform:none;text-shadow:0 0 20px #00FF88}}
+
+    /* ── World Threat Map canvas ── */
+    #threatCanvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+
+    /* ── Feature Cards (inline so always loads) ── */
+    .features-section{margin:48px 0 0}
+    .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+    @media(max-width:960px){.features-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:600px){.features-grid{grid-template-columns:1fr}}
+    .feature-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px 22px 20px;position:relative;overflow:hidden;transition:border-color .22s,transform .22s,box-shadow .22s;display:flex;flex-direction:column}
+    .feature-card:hover{border-color:rgba(0,255,136,.45);transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,255,136,.07)}
+    .feature-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2),transparent);opacity:0;transition:opacity .22s}
+    .feature-card:hover::after{opacity:1}
+    .feature-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px;background:rgba(0,255,136,.07);border:1px solid rgba(0,255,136,.18);flex-shrink:0}
+    .feature-title{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px}
+    .feature-desc{font-size:12.5px;color:var(--text2);line-height:1.68;flex:1}
+    .feature-tag{display:inline-flex;align-items:center;margin-top:16px;font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,180,255,.08);border:1px solid rgba(0,180,255,.22);color:var(--accent2);letter-spacing:.8px;align-self:flex-start}
+
+    /* ── FAQ (inline so always loads) ── */
+    .faq-section{margin:48px 0 0}
+    .faq-list{margin-top:28px;display:flex;flex-direction:column;gap:10px}
+    .faq-item{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s,box-shadow .2s}
+    .faq-item:hover{border-color:rgba(0,255,136,.3)}
+    .faq-item.open{border-color:rgba(0,255,136,.45);box-shadow:0 4px 20px rgba(0,255,136,.05)}
+    .faq-question{width:100%;display:flex;align-items:center;justify-content:space-between;padding:17px 22px;background:none;border:none;cursor:pointer;text-align:left;gap:14px;transition:background .15s}
+    .faq-item.open .faq-question{background:rgba(0,255,136,.03)}
+    .faq-q-text{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);flex:1;line-height:1.4}
+    .faq-arrow{color:var(--accent);font-size:10px;transition:transform .25s ease;flex-shrink:0;opacity:.7}
+    .faq-item.open .faq-arrow{transform:rotate(90deg);opacity:1}
+    .faq-answer{max-height:0;overflow:hidden;transition:max-height .35s ease,padding .35s ease;padding:0 22px;border-top:1px solid transparent}
+    .faq-item.open .faq-answer{max-height:600px;padding:0 22px 20px;border-top-color:var(--border)}
+    .faq-answer p{font-size:13px;color:var(--text2);line-height:1.75;margin:14px 0 0}
+    .faq-answer ul{margin:12px 0 0 20px;font-size:13px;color:var(--text2);line-height:1.9}
+    .faq-answer li{margin-bottom:2px}
+    .faq-answer strong{color:var(--text)}
+    .faq-answer code{background:var(--bg3);color:var(--accent);font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:4px;border:1px solid var(--border)}
+    .section-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:56px 0 0}
+    </style>
+</head>
+<body>
+
+    <!-- Intro Splash (once per session) -->
+    <div id="splash">
+        <canvas id="splashCanvas"></canvas>
+        <div class="splash-content">
+            <div class="splash-logo"><span>VULN</span>SCAN <span style="color:#00B4FF;font-size:.55em;vertical-align:super">AI</span></div>
+            <div class="splash-tagline">AI-Powered Web Vulnerability Scanner</div>
+            <div class="splash-boot" id="splashBoot"></div>
+            <div class="splash-bar-wrap"><div class="splash-bar-fill" id="splashBar"></div></div>
+        </div>
+        <div class="splash-skip" onclick="closeSplash()">[ SKIP ]</div>
+    </div>
+
+    <!-- World Threat Map Background -->
+    <canvas id="threatCanvas"></canvas>
+
+    <nav class="navbar">
+        <div class="nav-inner">
+            <a href="{% url 'scanner:index' %}" class="nav-brand">
+                <span class="brand-icon">◈</span>
+                <span class="brand-text">VULN<span class="brand-accent">SCAN</span></span>
+                <span class="brand-tag">AI</span>
+            </a>
+            <div class="nav-links">
+                <a href="{% url 'scanner:index' %}" class="nav-link {% if request.resolver_match.url_name == 'index' %}active{% endif %}">
+                    <span class="nav-icon">⬡</span> Scanner
+                </a>
+                <a href="{% url 'scanner:history' %}" class="nav-link {% if request.resolver_match.url_name == 'history' %}active{% endif %}">
+                    <span class="nav-icon">◎</span> History
+                </a>
+                <a href="{% url 'scanner:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <span class="nav-icon">◈</span> Dashboard
+                </a>
+            </div>
+            <div class="nav-status">
+                <span class="status-dot"></span>
+                <span class="status-text">ONLINE</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-inner">
+            <span class="footer-text">AI-Based Web Vulnerability Scanner &mdash; For authorized testing only</span>
+            <span class="footer-version">v1.0.0 &middot; RF-Classifier</span>
+        </div>
+    </footer>
+
+    <script src="{% static 'js/main.js' %}"></script>
+    {% block extra_scripts %}{% endblock %}
+
+    <script>
+    /* ════════════════════════════════════════════════
+       INTRO SPLASH — once per session
+    ════════════════════════════════════════════════ */
+    (function(){
+        const splash = document.getElementById('splash');
+        if(sessionStorage.getItem('splashShown')){ splash.remove(); return; }
+
+        const LINES=[
+            {t:'Initializing VulnScan AI engine...',  c:'boot-ok',  d:1300},
+            {t:'Loading Random Forest classifier...', c:'boot-ok',  d:1600},
+            {t:'Mounting vulnerability signatures...', c:'boot-ok', d:1850},
+            {t:'XSS / SQLi / CSRF / Redirect — OK',  c:'boot-ok',  d:2080},
+            {t:'ML model accuracy: 90%+',             c:'boot-warn',d:2300},
+            {t:'System ready. Launching interface...',c:'boot-ok',  d:2520},
+        ];
+        const sc=document.getElementById('splashCanvas');
+        const sx=sc.getContext('2d');
+        sc.width=window.innerWidth; sc.height=window.innerHeight;
+        const CH='アイウエオABCDEF0123456789!@#$%^&*',CW=18;
+        const cols=Math.floor(sc.width/CW);
+        const drops=Array.from({length:cols},()=>Math.random()*-50);
+        const rain=setInterval(()=>{
+            sx.fillStyle='rgba(0,0,0,0.06)'; sx.fillRect(0,0,sc.width,sc.height);
+            sx.font='13px monospace';
+            for(let i=0;i<cols;i++){
+                const y=drops[i]*CW;
+                sx.fillStyle='#ffffff';
+                sx.fillText(CH[Math.floor(Math.random()*CH.length)],i*CW,y);
+                sx.fillStyle=i%5===0?'#00FF88':'#00993344';
+                sx.fillText(CH[Math.floor(Math.random()*CH.length)],i*CW,y-CW);
+                if(y>sc.height&&Math.random()>.975)drops[i]=0;
+                drops[i]+=.5;
+            }
+        },40);
+        const bootEl=document.getElementById('splashBoot'),barEl=document.getElementById('splashBar');
+        LINES.forEach(({t,c,d},i)=>{
+            setTimeout(()=>{
+                const div=document.createElement('div');
+                div.className=`boot-line ${c}`; div.style.animationDelay='0s';
+                div.innerHTML=`<span class="boot-prefix">${c==='boot-warn'?'[ !! ] ':'[ OK ] '}</span>${t}`;
+                bootEl.appendChild(div); bootEl.scrollTop=bootEl.scrollHeight;
+                barEl.style.width=Math.round(((i+1)/LINES.length)*100)+'%';
+                if(i===LINES.length-1)setTimeout(closeSplash,500);
+            },d);
+        });
+        window.closeSplash=function(){
+            sessionStorage.setItem('splashShown','1');
+            clearInterval(rain);
+            document.getElementById('splash').classList.add('hide');
+            setTimeout(()=>{const el=document.getElementById('splash');if(el)el.remove();},700);
+        };
+        setTimeout(closeSplash,4500);
+    })();
+
+
+    /* ════════════════════════════════════════════════
+       WORLD THREAT MAP BACKGROUND
+       — Mercator world outline + attack arcs + nodes
+       — Very light opacity so UI stays readable
+    ════════════════════════════════════════════════ */
+    (function(){
+        const cv=document.getElementById('threatCanvas');
+        const cx=cv.getContext('2d');
+        function resize(){cv.width=window.innerWidth;cv.height=window.innerHeight;}
+        resize(); window.addEventListener('resize',resize);
+        const W=()=>cv.width, H=()=>cv.height;
+
+        /* World continents as simplified polygon outlines (normalised 0-1) */
+        /* Coordinates: [lng -180..180 → x] [lat 90..-90 → y] in Mercator */
+        function toXY(lng,lat){
+            return [(lng+180)/360*W(), (90-lat)/180*H()];
+        }
+
+        /* Simplified continent outlines — array of [lng,lat] polygons */
+        const CONTINENTS=[
+            /* North America */
+            [[-168,72],[-140,72],[-95,72],[-75,68],[-65,62],[-55,47],[-52,42],[-60,42],[-74,36],[-80,25],[-88,16],[-78,8],[-77,8],[-82,10],[-85,11],[-83,16],[-88,16],[-92,18],[-104,19],[-110,24],[-117,32],[-120,39],[-124,49],[-140,60],[-155,60],[-168,60],[-168,72]],
+            /* South America */
+            [[-80,12],[-75,11],[-60,8],[-52,5],[-35,-5],[-35,-12],[-40,-22],[-45,-24],[-48,-28],[-52,-34],[-58,-40],[-65,-46],[-70,-52],[-68,-56],[-64,-55],[-60,-52],[-55,-48],[-50,-29],[-48,-28],[-44,-22],[-40,-12],[-35,-8],[-35,5],[-50,5],[-60,8],[-72,12],[-80,12]],
+            /* Europe */
+            [[-10,36],[0,36],[10,38],[15,38],[20,37],[28,37],[30,40],[32,42],[36,42],[28,46],[20,48],[15,47],[10,54],[5,54],[0,51],[-5,48],[-10,44],[-10,36]],
+            /* Africa */
+            [[-18,15],[-17,12],[-15,10],[-10,8],[-5,5],[0,5],[5,4],[10,2],[15,-3],[20,-8],[25,-12],[30,-16],[33,-22],[30,-26],[25,-34],[20,-35],[15,-30],[10,-22],[5,-12],[0,-5],[-5,2],[-10,5],[-15,8],[-18,12],[-18,15]],
+            /* Russia/Asia */
+            [[30,70],[40,70],[60,72],[80,75],[100,75],[120,72],[140,70],[160,68],[170,65],[180,64],[180,50],[170,46],[160,42],[150,40],[140,38],[135,34],[125,32],[120,24],[110,20],[100,18],[95,22],[90,24],[80,28],[70,26],[60,22],[55,26],[50,30],[45,34],[40,38],[35,38],[30,42],[25,46],[20,55],[20,60],[25,66],[30,70]],
+            /* Australia */
+            [[114,-22],[118,-20],[122,-18],[130,-12],[136,-12],[140,-16],[144,-14],[148,-18],[152,-24],[154,-28],[152,-32],[148,-38],[142,-38],[136,-36],[130,-32],[122,-34],[114,-30],[114,-22]],
+        ];
+
+        /* City nodes — [lng, lat, label, hot] */
+        const CITIES=[
+            [-74,40,'NYC',false],[2,49,'LON',false],[139,36,'TYO',false],
+            [121,31,'SHA',true],[116,40,'BEJ',true],[77,29,'DEL',false],
+            [37,56,'MOS',true],[-43,-23,'SAO',false],[18,-34,'JNB',false],
+            [-99,19,'MEX',false],[151,-34,'SYD',false],[103,1,'SIN',false],
+            [28,41,'IST',false],[55,25,'DXB',false],[-87,42,'CHI',false],
+            [-118,34,'LAX',false],[13,52,'BER',false],[2,48,'PAR',false],
+            [31,30,'CAI',true],[72,19,'MUM',false],
+        ];
+
+        /* Attack arc state */
+        const ARCS=[];
+        function spawnArc(){
+            const src=CITIES[Math.floor(Math.random()*CITIES.length)];
+            const dst=CITIES[Math.floor(Math.random()*CITIES.length)];
+            if(src===dst) return;
+            ARCS.push({src,dst,t:0,spd:.006+Math.random()*.004,col:src[3]||dst[3]?'255,60,60':'0,255,136'});
+        }
+        for(let i=0;i<8;i++) spawnArc();
+
+        /* Pulse rings on hot cities */
+        const PULSES=CITIES.filter(c=>c[3]).map(c=>({city:c,r:0,max:30,spd:.4}));
+
+        function drawContinents(){
+            cx.save();
+            cx.strokeStyle='rgba(0,180,255,0.12)';
+            cx.lineWidth=0.8;
+            cx.lineJoin='round';
+            CONTINENTS.forEach(poly=>{
+                cx.beginPath();
+                poly.forEach(([lng,lat],i)=>{
+                    const [x,y]=toXY(lng,lat);
+                    i===0?cx.moveTo(x,y):cx.lineTo(x,y);
+                });
+                cx.closePath();
+                cx.stroke();
+                /* subtle fill */
+                cx.fillStyle='rgba(0,100,180,0.04)';
+                cx.fill();
+            });
+            cx.restore();
+        }
+
+        function drawNodes(){
+            CITIES.forEach(([lng,lat,label,hot])=>{
+                const [x,y]=toXY(lng,lat);
+                /* glow */
+                const g=cx.createRadialGradient(x,y,0,x,y,hot?16:10);
+                g.addColorStop(0,hot?'rgba(255,60,60,0.35)':'rgba(0,255,136,0.2)');
+                g.addColorStop(1,'rgba(0,0,0,0)');
+                cx.beginPath(); cx.arc(x,y,hot?16:10,0,Math.PI*2);
+                cx.fillStyle=g; cx.fill();
+                /* dot */
+                cx.beginPath(); cx.arc(x,y,hot?3:2,0,Math.PI*2);
+                cx.fillStyle=hot?'rgba(255,80,80,0.9)':'rgba(0,255,136,0.7)';
+                cx.shadowColor=hot?'#FF3B30':'#00FF88'; cx.shadowBlur=hot?8:5;
+                cx.fill(); cx.shadowBlur=0;
+                /* label */
+                cx.fillStyle=hot?'rgba(255,120,120,0.7)':'rgba(0,255,136,0.5)';
+                cx.font='7px monospace'; cx.fillText(label,x+5,y-4);
+            });
+        }
+
+        function drawArcs(){
+            ARCS.forEach((arc,idx)=>{
+                arc.t+=arc.spd;
+                if(arc.t>=1){ ARCS.splice(idx,1); spawnArc(); return; }
+                const [sx,sy]=toXY(arc.src[0],arc.src[1]);
+                const [dx,dy]=toXY(arc.dst[0],arc.dst[1]);
+                /* control point — arc upward */
+                const mx=(sx+dx)/2, my=Math.min(sy,dy)-(Math.hypot(dx-sx,dy-sy)*0.35);
+                /* draw only the portion up to arc.t */
+                const steps=40;
+                cx.beginPath();
+                for(let i=0;i<=steps*arc.t;i++){
+                    const t2=i/steps;
+                    const bx=(1-t2)*(1-t2)*sx+2*(1-t2)*t2*mx+t2*t2*dx;
+                    const by=(1-t2)*(1-t2)*sy+2*(1-t2)*t2*my+t2*t2*dy;
+                    i===0?cx.moveTo(bx,by):cx.lineTo(bx,by);
+                }
+                cx.strokeStyle=`rgba(${arc.col},0.35)`;
+                cx.lineWidth=1; cx.stroke();
+                /* head dot */
+                const ht=arc.t, bx2=(1-ht)*(1-ht)*sx+2*(1-ht)*ht*mx+ht*ht*dx;
+                const by2=(1-ht)*(1-ht)*sy+2*(1-ht)*ht*my+ht*ht*dy;
+                cx.beginPath(); cx.arc(bx2,by2,2.5,0,Math.PI*2);
+                cx.fillStyle=`rgba(${arc.col},0.9)`;
+                cx.shadowColor=arc.col==='255,60,60'?'#FF3B30':'#00FF88'; cx.shadowBlur=7;
+                cx.fill(); cx.shadowBlur=0;
+            });
+        }
+
+        function drawPulses(){
+            PULSES.forEach(p=>{
+                p.r+=p.spd;
+                if(p.r>p.max) p.r=0;
+                const [x,y]=toXY(p.city[0],p.city[1]);
+                cx.beginPath(); cx.arc(x,y,p.r,0,Math.PI*2);
+                cx.strokeStyle=`rgba(255,60,60,${(1-p.r/p.max)*0.3})`;
+                cx.lineWidth=1; cx.stroke();
+            });
+        }
+
+        /* Grid lines — lat/lng */
+        function drawGrid(){
+            cx.save();
+            cx.strokeStyle='rgba(0,150,200,0.04)';
+            cx.lineWidth=0.5;
+            for(let lng=-180;lng<=180;lng+=30){
+                cx.beginPath();
+                const [x]=toXY(lng,0);
+                cx.moveTo(x,0); cx.lineTo(x,H()); cx.stroke();
+            }
+            for(let lat=-90;lat<=90;lat+=30){
+                cx.beginPath();
+                const [,y]=toXY(0,lat);
+                cx.moveTo(0,y); cx.lineTo(W(),y); cx.stroke();
+            }
+            cx.restore();
+        }
+
+        function render(){
+            cx.clearRect(0,0,W(),H());
+            drawGrid();
+            drawContinents();
+            drawPulses();
+            drawArcs();
+            drawNodes();
+            requestAnimationFrame(render);
+        }
+        render();
+    })();
+
+
+    /* ════════════════════════════════════════════════
+       FAQ toggle
+    ════════════════════════════════════════════════ */
+    function toggleFaq(btn){
+        const item=btn.closest('.faq2-item,.faq-item');
+        const isOpen=item.classList.contains('open');
+        document.querySelectorAll('.faq2-item.open,.faq-item.open').forEach(el=>el.classList.remove('open'));
+        if(!isOpen) item.classList.add('open');
+    }
+    </script>
+
+</body>
+</html>

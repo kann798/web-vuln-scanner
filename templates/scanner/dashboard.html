@@ -1,0 +1,424 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard — VulnScanner AI{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── Page layout ── */
+.dashboard-page { max-width: 1200px; margin: 0 auto; padding: 32px 24px 60px; }
+
+.dash-header {
+    margin-bottom: 32px;
+}
+.dash-title {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+.dash-subtitle { font-size: 13px; color: var(--text3); }
+
+/* ── Summary cards row ── */
+.dash-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+}
+.dash-stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+}
+.dash-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+}
+.dash-stat-value {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 6px;
+}
+.dash-stat-value.danger  { color: var(--critical); }
+.dash-stat-value.warning { color: var(--high); }
+.dash-stat-value.blue    { color: var(--accent2); }
+.dash-stat-label { font-size: 11px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.5px; text-transform: uppercase; }
+
+/* ── Chart grid ── */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+/* ── Chart card ── */
+.chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+.chart-card-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.chart-card-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+}
+.chart-card-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.2);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+.chart-card-body {
+    padding: 20px;
+    position: relative;
+}
+
+/* ── Bottom severity breakdown full-width ── */
+.chart-card.full { grid-column: 1 / -1; }
+
+/* ── Legend ── */
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+    justify-content: center;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+}
+.legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ── Empty state ── */
+.dash-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text3);
+    font-family: var(--mono);
+}
+.dash-empty-icon { font-size: 40px; margin-bottom: 12px; }
+.dash-empty-title { font-size: 16px; color: var(--text2); margin-bottom: 6px; }
+.dash-empty-desc { font-size: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-page">
+
+    <div class="dash-header">
+        <div class="dash-title">◈ VULNERABILITY DISTRIBUTION DASHBOARD</div>
+        <div class="dash-subtitle">Aggregated analysis across all {{ total_scans }} scan{{ total_scans|pluralize }}</div>
+    </div>
+
+    {% if total_scans == 0 %}
+    <!-- Empty state -->
+    <div class="chart-card" style="margin-top:40px;">
+        <div class="dash-empty">
+            <div class="dash-empty-icon">◎</div>
+            <div class="dash-empty-title">No scan data yet</div>
+            <div class="dash-empty-desc">Run some scans first — the dashboard will populate automatically.</div>
+        </div>
+    </div>
+
+    {% else %}
+
+    <!-- Summary stat cards -->
+    <div class="dash-stats">
+        <div class="dash-stat-card">
+            <div class="dash-stat-value">{{ total_scans }}</div>
+            <div class="dash-stat-label">Total Scans</div>
+        </div>
+        <div class="dash-stat-card">
+            <div class="dash-stat-value danger" id="statCritical">—</div>
+            <div class="dash-stat-label">Critical / High</div>
+        </div>
+        <div class="dash-stat-card">
+            <div class="dash-stat-value warning">{{ total_findings }}</div>
+            <div class="dash-stat-label">Total Findings</div>
+        </div>
+        <div class="dash-stat-card">
+            <div class="dash-stat-value blue" id="statTopVuln">—</div>
+            <div class="dash-stat-label">Top Vuln Type</div>
+        </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="charts-grid">
+
+        <!-- Pie chart — OWASP distribution -->
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span class="chart-card-title">OWASP Top 10 — Finding Distribution</span>
+                <span class="chart-card-tag">PIE</span>
+            </div>
+            <div class="chart-card-body">
+                <canvas id="owaspPie" height="280"></canvas>
+                <div class="chart-legend" id="owaspLegend"></div>
+            </div>
+        </div>
+
+        <!-- Bar chart — Severity breakdown -->
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span class="chart-card-title">Severity Level Breakdown</span>
+                <span class="chart-card-tag">BAR</span>
+            </div>
+            <div class="chart-card-body">
+                <canvas id="severityBar" height="280"></canvas>
+            </div>
+        </div>
+
+        <!-- Full-width bar — per-type breakdown -->
+        <div class="chart-card full">
+            <div class="chart-card-header">
+                <span class="chart-card-title">Vulnerability Type vs Count — Detailed View</span>
+                <span class="chart-card-tag">HORIZONTAL BAR</span>
+            </div>
+            <div class="chart-card-body">
+                <canvas id="vulnHBar" height="180"></canvas>
+            </div>
+        </div>
+
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if total_scans > 0 %}
+<script>
+// ── Data from Django ────────────────────────────────────────
+const vulnCounts    = {{ vuln_counts|safe }};
+const severityCounts = {{ severity_counts|safe }};
+const riskDist      = {{ risk_dist|safe }};
+
+// ── Color palette ───────────────────────────────────────────
+const VULN_COLORS = {
+    'XSS':                   '#FF3B30',
+    'SQL Injection':         '#FF9F0A',
+    'CSRF':                  '#BF5AF2',
+    'Open Redirect':         '#00B4FF',
+    'Sensitive Data Exposure':'#00FF88',
+};
+
+const SEV_COLORS = {
+    critical: '#FF3B30',
+    high:     '#FF6B35',
+    medium:   '#FFB800',
+    low:      '#34C759',
+    info:     '#00B4FF',
+};
+
+// ── Global Chart.js defaults ────────────────────────────────
+Chart.defaults.color = '#8B949E';
+Chart.defaults.borderColor = '#30363D';
+Chart.defaults.font.family = "'Space Mono', monospace";
+Chart.defaults.font.size = 11;
+
+// ── Populate summary stats ──────────────────────────────────
+const critHigh = (riskDist.critical || 0) + (riskDist.high || 0);
+document.getElementById('statCritical').textContent = critHigh;
+
+const topEntry = Object.entries(vulnCounts).sort((a,b) => b[1]-a[1])[0];
+if (topEntry && topEntry[1] > 0) {
+    const abbrev = {'XSS':'XSS','SQL Injection':'SQLi','CSRF':'CSRF','Open Redirect':'REDIR','Sensitive Data Exposure':'DATA'};
+    document.getElementById('statTopVuln').textContent = abbrev[topEntry[0]] || topEntry[0];
+} else {
+    document.getElementById('statTopVuln').textContent = 'N/A';
+}
+
+// ── 1. OWASP Pie Chart ──────────────────────────────────────
+(function() {
+    const labels  = Object.keys(vulnCounts);
+    const data    = Object.values(vulnCounts);
+    const colors  = labels.map(l => VULN_COLORS[l] || '#8B949E');
+    const hasData = data.some(v => v > 0);
+
+    const ctx = document.getElementById('owaspPie').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: hasData ? data : [1,1,1,1,1],
+                backgroundColor: hasData ? colors.map(c => c + 'CC') : ['#30363D'],
+                borderColor:     hasData ? colors : ['#30363D'],
+                borderWidth: 2,
+                hoverOffset: 10,
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '58%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    enabled: hasData,
+                    backgroundColor: '#161B22',
+                    borderColor: '#30363D',
+                    borderWidth: 1,
+                    padding: 10,
+                    callbacks: {
+                        label: ctx => {
+                            const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                            const pct = total > 0 ? ((ctx.parsed / total)*100).toFixed(1) : 0;
+                            return `  ${ctx.label}: ${ctx.parsed} findings (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Build custom legend
+    const legend = document.getElementById('owaspLegend');
+    labels.forEach((l, i) => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = `<div class="legend-dot" style="background:${colors[i]}"></div>${l} <span style="color:var(--accent);margin-left:4px;">${data[i]}</span>`;
+        legend.appendChild(item);
+    });
+})();
+
+// ── 2. Severity Bar Chart ───────────────────────────────────
+(function() {
+    const labels = ['Critical', 'High', 'Medium', 'Low', 'Info'];
+    const keys   = ['critical', 'high', 'medium', 'low', 'info'];
+    const data   = keys.map(k => severityCounts[k] || 0);
+    const colors = keys.map(k => SEV_COLORS[k]);
+
+    const ctx = document.getElementById('severityBar').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Findings',
+                data,
+                backgroundColor: colors.map(c => c + '55'),
+                borderColor: colors,
+                borderWidth: 2,
+                borderRadius: 6,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#161B22',
+                    borderColor: '#30363D',
+                    borderWidth: 1,
+                    padding: 10,
+                    callbacks: {
+                        label: ctx => `  ${ctx.parsed.y} finding${ctx.parsed.y !== 1 ? 's' : ''}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(48,54,61,0.5)' },
+                    ticks: { color: '#8B949E' },
+                },
+                y: {
+                    grid: { color: 'rgba(48,54,61,0.5)' },
+                    ticks: { color: '#8B949E', precision: 0 },
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+})();
+
+// ── 3. Horizontal Bar — per vuln type ──────────────────────
+(function() {
+    const entries = Object.entries(vulnCounts).sort((a,b) => b[1]-a[1]);
+    const labels  = entries.map(e => e[0]);
+    const data    = entries.map(e => e[1]);
+    const colors  = labels.map(l => VULN_COLORS[l] || '#8B949E');
+
+    const ctx = document.getElementById('vulnHBar').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Total Findings',
+                data,
+                backgroundColor: colors.map(c => c + '44'),
+                borderColor: colors,
+                borderWidth: 2,
+                borderRadius: 5,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#161B22',
+                    borderColor: '#30363D',
+                    borderWidth: 1,
+                    padding: 10,
+                    callbacks: {
+                        label: ctx => `  ${ctx.parsed.x} finding${ctx.parsed.x !== 1 ? 's' : ''}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(48,54,61,0.5)' },
+                    ticks: { color: '#8B949E', precision: 0 },
+                    beginAtZero: true,
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: '#E6EDF3', font: { size: 12 } },
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

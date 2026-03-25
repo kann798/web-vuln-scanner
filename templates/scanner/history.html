@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Scan History — VulnScanner AI{% endblock %}
+
+{% block content %}
+<div class="history-page">
+
+    <div class="page-header">
+        <h1 class="page-title">Scan History</h1>
+        <div style="display:flex;gap:10px;align-items:center;">
+            {% if scans %}
+            <button class="clear-all-btn" onclick="confirmClearAll()">🗑 Clear All</button>
+            {% endif %}
+            <a href="{% url 'scanner:index' %}" class="scan-new-btn">+ New Scan</a>
+        </div>
+    </div>
+
+    {% if scans %}
+    <div class="scans-table-wrap">
+        <table class="scans-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Target URL</th>
+                    <th>Risk Level</th>
+                    <th>Score</th>
+                    <th>Vulns</th>
+                    <th>Duration</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="historyTableBody">
+                {% for scan in scans %}
+                <tr class="scan-row" id="scan-row-{{ scan.pk }}" onclick="window.location='{% url 'scanner:scan_detail' scan.pk %}'">
+                    <td class="id-cell">#{{ scan.pk }}</td>
+                    <td class="url-cell">
+                        <span>{% if scan.url|slice:":5" == "https" %}🔒{% else %}⚠{% endif %}</span>
+                        {{ scan.url|truncatechars:60 }}
+                    </td>
+                    <td>
+                        <span class="risk-badge risk-{{ scan.risk_level }}">
+                            {{ scan.risk_level|upper }}
+                        </span>
+                    </td>
+                    <td class="score-cell risk-{{ scan.risk_level }}">{{ scan.risk_score }}/100</td>
+                    <td class="vuln-count">{{ scan.vulnerabilities_found }}</td>
+                    <td class="duration-cell">{{ scan.scan_duration }}s</td>
+                    <td class="date-cell">{{ scan.scan_date|date:"M d, Y H:i" }}</td>
+                    <td onclick="event.stopPropagation()" class="actions-cell">
+                        <a href="{% url 'scanner:scan_detail' scan.pk %}" class="action-btn view-btn">View</a>
+                        {% if scan.pdf_report %}
+                        <a href="{% url 'scanner:download_report' scan.pk %}" class="action-btn dl-btn">PDF</a>
+                        {% endif %}
+                        <button class="action-btn delete-btn" onclick="deleteScan({{ scan.pk }}, event)">✕</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div id="recordCount" style="margin-top:12px;font-family:monospace;font-size:12px;color:var(--text3);">
+        {{ scans|length }} record{{ scans|length|pluralize }} total
+    </div>
+
+    {% else %}
+    <div class="empty-state" id="emptyState">
+        <div class="empty-icon">◎</div>
+        <div class="empty-title">No Scans Yet</div>
+        <p class="empty-desc">You haven't run any scans. Start by entering a target URL on the main page.</p>
+        <a href="{% url 'scanner:index' %}" class="scan-new-btn">Start Your First Scan</a>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:32px;max-width:400px;width:90%;text-align:center;">
+        <div style="font-size:32px;margin-bottom:12px;">🗑</div>
+        <div id="modalTitle" style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px;">Clear All History?</div>
+        <div id="modalDesc" style="font-size:13px;color:var(--text2);margin-bottom:24px;line-height:1.6;">
+            This will permanently delete all scan records and PDF reports. This cannot be undone.
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+            <button onclick="closeModal()" style="padding:10px 24px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-family:var(--mono);font-size:13px;cursor:pointer;">Cancel</button>
+            <button id="confirmBtn" style="padding:10px 24px;border-radius:8px;border:none;background:#c0392b;color:#fff;font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer;">Delete</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+.clear-all-btn {
+    background: rgba(192,57,43,0.12);
+    border: 1px solid rgba(192,57,43,0.4);
+    color: #e74c3c;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.clear-all-btn:hover {
+    background: rgba(192,57,43,0.25);
+    border-color: #e74c3c;
+}
+.delete-btn {
+    background: rgba(192,57,43,0.10);
+    border: 1px solid rgba(192,57,43,0.3) !important;
+    color: #e74c3c !important;
+    font-size: 11px;
+    padding: 4px 8px !important;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.delete-btn:hover {
+    background: rgba(192,57,43,0.25);
+    border-color: #e74c3c !important;
+}
+.scan-row.deleting {
+    opacity: 0.35;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+#confirmModal.show { display: flex !important; }
+</style>
+
+<script>
+let pendingDeleteId = null;
+
+function deleteScan(scanId, event) {
+    event.stopPropagation();
+    pendingDeleteId = scanId;
+    document.getElementById('modalTitle').textContent = 'Delete Scan #' + scanId + '?';
+    document.getElementById('modalDesc').textContent = 'This will permanently delete this scan record and its PDF report. This cannot be undone.';
+    document.getElementById('confirmBtn').onclick = executeDelete;
+    document.getElementById('confirmModal').classList.add('show');
+}
+
+async function executeDelete() {
+    closeModal();
+    const row = document.getElementById('scan-row-' + pendingDeleteId);
+    if (row) row.classList.add('deleting');
+    try {
+        const res = await fetch('/scan/' + pendingDeleteId + '/delete/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() },
+        });
+        const data = await res.json();
+        if (data.success && row) {
+            row.style.transition = 'opacity 0.3s, max-height 0.3s';
+            row.style.opacity = '0';
+            setTimeout(() => { row.remove(); updateCount(); checkEmpty(); }, 320);
+        } else {
+            if (row) row.classList.remove('deleting');
+        }
+    } catch (err) {
+        if (row) row.classList.remove('deleting');
+    }
+}
+
+function confirmClearAll() {
+    const count = document.querySelectorAll('#historyTableBody tr').length;
+    document.getElementById('modalTitle').textContent = 'Clear All History?';
+    document.getElementById('modalDesc').textContent =
+        'This will permanently delete all ' + count + ' scan record' + (count !== 1 ? 's' : '') + ' and PDF reports. This cannot be undone.';
+    document.getElementById('confirmBtn').onclick = executeClearAll;
+    document.getElementById('confirmModal').classList.add('show');
+}
+
+async function executeClearAll() {
+    closeModal();
+    const rows = document.querySelectorAll('#historyTableBody tr');
+    rows.forEach(r => r.classList.add('deleting'));
+    try {
+        const res = await fetch('/history/clear/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() },
+        });
+        const data = await res.json();
+        if (data.success) {
+            rows.forEach(r => { r.style.opacity = '0'; r.style.transition = 'opacity 0.3s'; });
+            setTimeout(() => {
+                rows.forEach(r => r.remove());
+                updateCount();
+                checkEmpty();
+                const btn = document.querySelector('.clear-all-btn');
+                if (btn) btn.remove();
+            }, 350);
+        } else {
+            rows.forEach(r => r.classList.remove('deleting'));
+        }
+    } catch (err) {
+        rows.forEach(r => r.classList.remove('deleting'));
+    }
+}
+
+function closeModal() {
+    document.getElementById('confirmModal').classList.remove('show');
+    pendingDeleteId = null;
+}
+
+function updateCount() {
+    const n = document.querySelectorAll('#historyTableBody tr').length;
+    const el = document.getElementById('recordCount');
+    if (el) el.textContent = n + ' record' + (n !== 1 ? 's' : '') + ' total';
+}
+
+function checkEmpty() {
+    const n = document.querySelectorAll('#historyTableBody tr').length;
+    if (n === 0) {
+        const wrap = document.querySelector('.scans-table-wrap');
+        const countEl = document.getElementById('recordCount');
+        if (wrap) wrap.outerHTML = '<div class="empty-state"><div class="empty-icon">◎</div><div class="empty-title">No Scans Yet</div><p class="empty-desc">All records have been deleted. Start a new scan from the main page.</p><a href="/" class="scan-new-btn">Start a New Scan</a></div>';
+        if (countEl) countEl.remove();
+    }
+}
+
+function getCsrfToken() {
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+}
+
+document.getElementById('confirmModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}

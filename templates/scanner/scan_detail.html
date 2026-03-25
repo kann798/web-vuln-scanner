@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Scan Report — {{ scan.url|truncatechars:40 }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Detail page extras ─────────────────────── */
+.fd { background:var(--bg); border:1px solid var(--border); border-radius:8px; margin:0 16px 8px; overflow:hidden; }
+.fd-hdr { display:flex; justify-content:space-between; align-items:center; padding:11px 14px; cursor:pointer; }
+.fd-hdr:hover { background:var(--bg3); }
+.fd-body { padding:0 14px 14px; display:none; }
+.fd-body.open { display:block; }
+.arrow { font-size:10px; color:var(--text3); transition:transform .2s; display:inline-block; margin-right:8px; }
+.arrow.open { transform:rotate(90deg); }
+.ev-box { background:rgba(255,184,0,.06); border-left:3px solid var(--medium); padding:8px 12px; border-radius:0 6px 6px 0; margin-bottom:10px; font-size:12px; color:var(--text2); line-height:1.6; }
+.tabs { display:flex; gap:4px; margin-bottom:8px; flex-wrap:wrap; }
+.tb { font-family:monospace; font-size:11px; padding:5px 12px; border-radius:5px; cursor:pointer; color:var(--text3); background:var(--bg3); border:1px solid var(--border); transition:all .15s; }
+.tb.on { color:var(--accent); background:rgba(0,255,136,.08); border-color:rgba(0,255,136,.3); }
+.tp { display:none; }
+.tp.on { display:block; }
+.pl-box { background:#1a0808; border:1px solid rgba(255,59,48,.3); border-radius:6px; padding:10px 13px; margin-bottom:8px; }
+.pl-lbl { font-family:monospace; font-size:9px; color:var(--critical); letter-spacing:1px; margin-bottom:5px; }
+.pl-val { font-family:monospace; font-size:12px; color:#ff9090; word-break:break-all; }
+.poc-box { background:#08130d; border:1px solid rgba(0,255,136,.2); border-radius:6px; padding:10px 13px; margin-bottom:6px; }
+.poc-box a { font-family:monospace; font-size:11px; color:var(--accent); word-break:break-all; }
+.dg { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+.di { background:var(--bg2); border-radius:5px; padding:9px 11px; }
+.di-l { font-family:monospace; font-size:9px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; margin-bottom:3px; }
+.di-v { font-family:monospace; font-size:11px; color:var(--accent2); word-break:break-all; }
+.cb { background:#060d12; border:1px solid var(--border); border-radius:6px; padding:13px; overflow-x:auto; position:relative; }
+.cb pre { font-family:'Courier New',monospace; font-size:11.5px; color:#90d898; white-space:pre; margin:0; line-height:1.7; }
+.cp { position:absolute; top:7px; right:7px; font-family:monospace; font-size:9px; background:var(--bg3); border:1px solid var(--border); color:var(--text2); padding:2px 7px; border-radius:3px; cursor:pointer; }
+.cp:hover { color:var(--accent); border-color:var(--accent); }
+.cnt-badge { font-family:monospace; font-size:10px; background:rgba(0,180,255,.1); border:1px solid rgba(0,180,255,.2); color:var(--accent2); padding:2px 8px; border-radius:10px; }
+.warn-note { font-size:10px; color:var(--text3); padding:4px 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+
+  <a href="{% url 'scanner:index' %}" class="back-link">← Back to Scanner</a>
+
+  <!-- Header -->
+  <div class="report-header">
+    <div class="report-header-top">
+      <div>
+        <h1 class="report-title">Security Assessment Report</h1>
+        <div class="report-url">
+          <span>{% if scan.url|slice:":5" == "https" %}🔒{% else %}⚠{% endif %}</span>
+          <span class="text-blue">{{ scan.url }}</span>
+        </div>
+        <div class="report-meta">
+          Scanned {{ scan.scan_date|date:"N j, Y \a\t H:i" }} UTC &middot;
+          Duration: {{ scan.scan_duration }}s &middot;
+          Status: <span class="text-accent">{{ scan.status|upper }}</span>
+        </div>
+      </div>
+      {% if scan.pdf_report %}
+      <a href="{% url 'scanner:download_report' scan.pk %}" class="dl-report-btn">⬇ Download PDF</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Risk score -->
+  <div class="risk-overview risk-overview-{{ scan.risk_level }}">
+    <div class="risk-score-display">
+      <div class="risk-number risk-{{ scan.risk_level }}">{{ scan.risk_score }}</div>
+      <div class="risk-label">RISK SCORE</div>
+      <div class="risk-outof">/100</div>
+    </div>
+    <div class="risk-divider"></div>
+    <div class="risk-details">
+      <div class="risk-tier risk-{{ scan.risk_level }}">{{ scan.risk_level|upper }} RISK</div>
+      <div class="risk-stat">
+        <span class="rs-label">Vulnerabilities Found</span>
+        <span class="rs-value">{{ scan.vulnerabilities_found }}</span>
+      </div>
+      <div class="risk-bar-container">
+        <div class="risk-bar-track">
+          <div class="risk-bar-fill risk-{{ scan.risk_level }}" style="width:{{ scan.risk_score }}%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  {% with vulns=scan.vulnerabilities %}
+  {% if vulns %}
+  <h2 class="section-title" style="margin-bottom:16px;">
+    Detailed Findings — Exact Locations, Payloads &amp; Fix Code
+  </h2>
+
+  {% for vuln in vulns %}
+  <div class="finding-card finding-{{ vuln.severity }}" style="margin-bottom:20px;">
+    <div class="finding-header">
+      <div>
+        <div class="finding-type">{{ vuln.type }}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;">{{ vuln.description }}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        {% if vuln.findings %}
+        <span class="cnt-badge">{{ vuln.findings|length }} finding{{ vuln.findings|length|pluralize }}</span>
+        {% endif %}
+        <div class="finding-severity severity-{{ vuln.severity }}">{{ vuln.severity|upper }}</div>
+      </div>
+    </div>
+
+    {% if vuln.findings %}
+      {% for f in vuln.findings %}
+      {% with vi=forloop.parentloop.counter fi=forloop.counter %}
+      <div class="fd">
+
+        <!-- Collapsible header -->
+        <div class="fd-hdr" onclick="tog(this)">
+          <div style="display:flex;align-items:center;">
+            <span class="arrow">▶</span>
+            <span style="font-family:monospace;font-size:11px;color:var(--text3);margin-right:10px;">#{{ fi }}</span>
+            <span style="font-size:13px;font-weight:600;">{{ f.location }}</span>
+          </div>
+          <span style="font-family:monospace;font-size:11px;color:var(--accent2);">{{ f.parameter }}</span>
+        </div>
+
+        <!-- Body -->
+        <div class="fd-body">
+
+          <div class="ev-box">⚠ {{ f.evidence }}</div>
+
+          <!-- Tabs -->
+          <div class="tabs">
+            <button class="tb on"  onclick="tab(this,'pl_{{ vi }}_{{ fi }}')">💉 Payload</button>
+            <button class="tb"     onclick="tab(this,'pu_{{ vi }}_{{ fi }}')">🔗 PoC URL</button>
+            <button class="tb"     onclick="tab(this,'fc_{{ vi }}_{{ fi }}')">🔧 Fix Code</button>
+            {% if f.poc_html %}<button class="tb" onclick="tab(this,'ph_{{ vi }}_{{ fi }}')">📄 PoC HTML</button>{% endif %}
+          </div>
+
+          <!-- Payload tab -->
+          <div class="tp on" id="pl_{{ vi }}_{{ fi }}">
+            <div class="pl-box">
+              <div class="pl-lbl">⚡ ATTACK PAYLOAD</div>
+              <div class="pl-val">{{ f.payload }}</div>
+            </div>
+            <div class="dg">
+              <div class="di"><div class="di-l">Location</div><div class="di-v">{{ f.location }}</div></div>
+              <div class="di"><div class="di-l">Parameter</div><div class="di-v">{{ f.parameter }}</div></div>
+            </div>
+          </div>
+
+          <!-- PoC URL tab -->
+          <div class="tp" id="pu_{{ vi }}_{{ fi }}">
+            <div class="poc-box">
+              <div class="di-l" style="color:var(--accent);margin-bottom:6px;">🔗 PROOF OF CONCEPT URL</div>
+              <a href="{{ f.poc_url }}" target="_blank" rel="noopener noreferrer">{{ f.poc_url }}</a>
+            </div>
+            <div class="warn-note">⚠ Only test against systems you own or have explicit written permission to test.</div>
+          </div>
+
+          <!-- Fix Code tab -->
+          <div class="tp" id="fc_{{ vi }}_{{ fi }}">
+            <div class="cb">
+              <button class="cp" onclick="cp(this)">Copy</button>
+              <pre>{{ f.fix_code }}</pre>
+            </div>
+          </div>
+
+          <!-- PoC HTML tab (CSRF) -->
+          {% if f.poc_html %}
+          <div class="tp" id="ph_{{ vi }}_{{ fi }}">
+            <div class="cb">
+              <button class="cp" onclick="cp(this)">Copy</button>
+              <pre>{{ f.poc_html }}</pre>
+            </div>
+          </div>
+          {% endif %}
+
+        </div><!-- fd-body -->
+      </div><!-- fd -->
+      {% endwith %}
+      {% endfor %}
+
+    {% else %}
+      {% if vuln.issues %}
+      <div class="finding-issues" style="margin:0 16px 12px;">
+        <div class="issues-title">Issues</div>
+        <ul class="issues-list">
+          {% for issue in vuln.issues %}<li class="issue-item">{{ issue }}</li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    {% endif %}
+
+    <div class="finding-remediation" style="margin:4px 16px 16px;">
+      <div class="remediation-title">✓ General Remediation</div>
+      <p class="remediation-text">{{ vuln.remediation }}</p>
+    </div>
+
+  </div><!-- finding-card -->
+  {% endfor %}
+
+  {% else %}
+  <div class="clean-result">
+    <div class="clean-icon">✅</div>
+    <div class="clean-title">No Vulnerabilities Detected</div>
+    <p class="clean-desc">No critical issues found. Consider a manual penetration test for full coverage.</p>
+  </div>
+  {% endif %}
+  {% endwith %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function tog(hdr) {
+  var body  = hdr.nextElementSibling;
+  var arrow = hdr.querySelector('.arrow');
+  var open  = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  arrow.classList.toggle('open', !open);
+}
+
+function tab(btn, id) {
+  var body = btn.closest('.fd-body');
+  body.querySelectorAll('.tb').forEach(function(b){ b.classList.remove('on'); });
+  body.querySelectorAll('.tp').forEach(function(p){ p.classList.remove('on'); });
+  btn.classList.add('on');
+  var el = document.getElementById(id);
+  if (el) el.classList.add('on');
+}
+
+function cp(btn) {
+  var pre = btn.nextElementSibling;
+  navigator.clipboard.writeText(pre.textContent).then(function(){
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--accent)';
+    setTimeout(function(){ btn.textContent = 'Copy'; btn.style.color = ''; }, 2000);
+  });
+}
+</script>
+{% endblock %}
