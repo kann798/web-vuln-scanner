@@ -352,9 +352,9 @@
        FAQ toggle
     ════════════════════════════════════════════════ */
     function toggleFaq(btn){
-        const item=btn.closest('.faq2-item,.faq-item');
+        const item=btn.closest('.faq-item');
         const isOpen=item.classList.contains('open');
-        document.querySelectorAll('.faq2-item.open,.faq-item.open').forEach(el=>el.classList.remove('open'));
+        document.querySelectorAll('.faq-item.open').forEach(el=>el.classList.remove('open'));
         if(!isOpen) item.classList.add('open');
     }
     </script>
