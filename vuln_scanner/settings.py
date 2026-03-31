@@ -7,7 +7,7 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ── Load .env file automatically (no extra library needed) ──
+# ── Load .env file automatically ─────────────────────────────
 _env_file = BASE_DIR / '.env'
 if _env_file.exists():
     with open(_env_file) as _f:
@@ -17,15 +17,24 @@ if _env_file.exists():
                 _key, _, _val = _line.partition('=')
                 os.environ.setdefault(_key.strip(), _val.strip())
 
-# ── API Keys ─────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+# ── Security ─────────────────────────────────────────────────
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-vuln-scanner-secret-key-change-in-production-2024'
+)
 
-SECRET_KEY = 'django-insecure-vuln-scanner-secret-key-change-in-production-2024'
-
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() != 'false'
 
 ALLOWED_HOSTS = ['*']
 
+# ── Check if whitenoise is available ─────────────────────────
+try:
+    import whitenoise  # noqa
+    WHITENOISE_AVAILABLE = True
+except ImportError:
+    WHITENOISE_AVAILABLE = False
+
+# ── Installed Apps ────────────────────────────────────────────
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -36,8 +45,16 @@ INSTALLED_APPS = [
     'scanner',
 ]
 
+# ── Middleware ────────────────────────────────────────────────
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+]
+
+# Add whitenoise only if installed (production on Render)
+if WHITENOISE_AVAILABLE:
+    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+
+MIDDLEWARE += [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -85,11 +102,16 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+# ── Static files ──────────────────────────────────────────────
+STATIC_URL  = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
-MEDIA_URL = '/media/'
+# Use whitenoise storage only if available (Render production)
+if WHITENOISE_AVAILABLE:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+MEDIA_URL  = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
